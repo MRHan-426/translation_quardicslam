@@ -3,8 +3,13 @@
 step：迭代优化
 spin：批优化
 guess_initial_values：猜测初始值，进行初始化
+class QuadricSlam
+step: iterative optimization
+spin: batch optimization
+guess_initial_values: guess inital values and do initialization
 
 目前只有bounding box的因子。
+Only have b-box factor temporary
 '''
 
 from itertools import groupby
@@ -30,7 +35,7 @@ from .visual_odometry import VisualOdometry
 
 
 class QuadricSlam:
-    # 初始化，定义了系统初始状态等等
+    """初始化，定义了系统初始状态等等 init all system variables"""
     def __init__(
         self,
         data_source: DataSource,
@@ -59,8 +64,8 @@ class QuadricSlam:
         self.detector = detector
         self.visual_odometry = visual_odometry
 
-        self.on_new_estimate = on_new_estimate # 当系统有新的估计值时会调用该函数。
-        self.quadric_initialiser = quadric_initialiser # 初始化对偶二次曲面
+        self.on_new_estimate = on_new_estimate # 当系统有新的估计值时会调用该函数。 call to handle new estimates
+        self.quadric_initialiser = quadric_initialiser # 初始化对偶二次曲面 init dual quadric
 
         # Bail if optimiser settings and modes aren't compatible
         if (optimiser_batch == True and
@@ -89,10 +94,16 @@ class QuadricSlam:
         self.reset()
 
 
-    '''# 用来猜测系统状态的初始值的。
-    # 在进行图优化之前，需要估计一些参数的初值，而这些参数可能在初始状态下是未知的，因此需要猜测。
-    # 这个函数的主要作用是通过一些启发式方法猜测初始值。'''
     def guess_initial_values(self) -> None:
+        '''
+        用来猜测系统状态的初始值的。
+        在进行图优化之前，需要估计一些参数的初值，而这些参数可能在初始状态下是未知的，因此需要猜测。
+        这个函数的主要作用是通过一些启发式方法猜测初始值。
+
+        Use some heuristic method to guess init values.
+        before graph optimization, we need to estimate some init value. 
+        However, some params might be unknown in init state, and we need to guess.
+        '''
         # Guessing approach (only guess values that don't already have an estimate):
         # - guess poses using dead reckoning
         # - guess quadrics using Euclidean mean of all observations
@@ -154,10 +165,16 @@ class QuadricSlam:
                 self.state).addToValues(s.estimates, qbbs[0].objectKey())
 
 
-    '''等待数据源完成，进行批优化(batch)模式。
-    # 猜测初始值，进行优化，最后将优化后的结果存储在系统估计值中。
-    # 如果定义了 on_new_estimate，则该函数将使用当前状态调用 on_new_estimate。'''
+    
     def spin(self) -> None:
+        '''
+        等待数据源完成，进行批优化(batch)模式。
+        猜测初始值，进行优化，最后将优化后的结果存储在系统估计值中。
+        如果定义了 on_new_estimate，则该函数将使用当前状态调用 on_new_estimate。
+        Conduct batch optimization after data source is done.
+        Guess the initial values and optimize them. Store the optimized outputs in system.estimates.
+        if on_new_estimate is true, call on_new_estimate on current state. 
+        '''
         while not self.data_source.done():
             self.step()
 
@@ -171,9 +188,14 @@ class QuadricSlam:
                 self.on_new_estimate(self.state)
 
 
-    '''# 计算当前机器人的运动，利用机器人传感器读取的数据（如视觉、激光雷达等）以及之前保存的信息，
-    # 生成机器人的位姿和场景的三维结构（建图）。'''
+
     def step(self) -> None:
+        '''
+        计算当前机器人的运动，利用机器人传感器读取的数据（如视觉、激光雷达等）以及之前保存的信息，
+        生成机器人的位姿和场景的三维结构（建图）。
+        Calculate current robot movement using data read by sensors (cameras, Lidars, etc.) and previously stored information.
+        Generate robot pose and 3D structure of scene (mapping).
+        '''
         # Setup state for the current step
         # 将当前状态分配给变量s，并创建一个新的状态变量n
         s = self.state.system
@@ -190,6 +212,7 @@ class QuadricSlam:
         n.detections = (self.detector.detect(self.state)
                         if self.detector else [])
         # 将最新的测量数据关联到之前的数据中
+        # associate newest measure data into previous data.
         n.new_associated, s.associated, s.unassociated = (
             self.associator.associate(self.state))
 
@@ -202,14 +225,17 @@ class QuadricSlam:
             if d.quadric_key is not None
         }
 
-        # # Add new pose to the factor graph
+        # Add new pose to the factor graph
         # 将最新的测量数据添加到图中
+        # if this is the first step, add robot pose using prior information.
         # 如果这是第一步，则使用先验信息添加机器人的位姿
         if p is None:
             s.graph.add(
                 gtsam.PriorFactorPose3(n.pose_key, s.initial_pose,
                                        s.noise_prior))
         # 构造gtsam.BetweenFactorPose3因子，表示上一帧和当前帧之间的运动，加入到优化图中。
+        # construct gtsam.BetweenFactorPose3 which represent the motion bewteen last frame and current one 
+        # and add to the factor graph.
         else:
             s.graph.add(
                 gtsam.BetweenFactorPose3(
@@ -220,8 +246,10 @@ class QuadricSlam:
 
         # Add any newly associated detections to the factor graph
         # 对于每个新关联的检测结果，将其添加到图中。
-        # 新检测到的物体的边界框信息以及物体在图像上的投影位置转换为因子，并将其加入到图优化的因子图中
+        # 将新检测到的物体的边界框信息以及物体在图像上的投影位置转换为因子，并将其加入到图优化的因子图中
         # 详见BoundingBoxFactor.h
+        # convert newly detected object's b-box and object's projection location on image to factor and add to the factor graph
+        # look up BoundingBoxFactor.h for detail 
         for d in n.new_associated:
             if d.quadric_key is None:
                 print("WARN: skipping associated detection with "
@@ -237,22 +265,26 @@ class QuadricSlam:
         # 批处理模式(Batch)是将所有的因子同时添加到因子图中，然后一次性优化所有的因子，
         # 而迭代模式(Iterative)是逐个添加因子，然后每次添加一个因子之后就立即进行一次优化。
         # 如果是迭代模式，则进行优化以得到更好的状态估计。
+        # Batch mode is adding all factors into the factor graph then optimize them.
+        # iterative mode is iteratively adding one factor and optimize the graph once.
+        # If in iterative mode, optimize to get a better state estimation. 
         if not s.optimiser_batch:
             # 猜测一组初始值。
+            # guess a set of initial values
             self.guess_initial_values()
             
-            # 创建优化器
+            # 创建优化器 construct optimiser
             if s.optimiser is None:
                 s.optimiser = s.optimiser_type(s.optimiser_params)
             try:
                 # pu.db
-                # 更新当前优化器的因子和值。
+                # 更新当前优化器的因子和值。 update current optimiser's factors and values
                 s.optimiser.update(
                     new_factors(s.graph, s.optimiser.getFactorsUnsafe()),
                     new_values(s.estimates,
                                s.optimiser.getLinearizationPoint()))
 
-                # 计算得到最新的状态估计。
+                # 计算得到最新的状态估计。 calculate new estimation
                 s.estimates = s.optimiser.calculateEstimate()
             except RuntimeError as e:
                 # For handling gtsam::InderminantLinearSystemException:
@@ -261,11 +293,11 @@ class QuadricSlam:
             if self.on_new_estimate:
                 self.on_new_estimate(self.state)
 
-        # 向后推进一个步骤。
+        # 向后推进一个步骤。 step to next state
         self.state.prev_step = n
 
 
-    # 归零，没什么好说的
+    # 归零，没什么好说的 reset to zero.
     def reset(self) -> None:
         self.data_source.restart()
 

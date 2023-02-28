@@ -1,4 +1,4 @@
-'''
+"""
 定义了几个函数。
 QuadricInitialiser:用来初始化对偶二次曲面
 initialise_quadric_from_depth:这个函数用于从深度图像中初始化一个对偶二次曲面。(对我们没有用)
@@ -6,7 +6,7 @@ initialise_quadric_ray_intersection:由物体在多个视图中的观测点和�
 new_factors:用于比较两个因子图current和previous之间的差异
 new_values:用于比较两个变量集current和previous之间的差异。
 ps_and_qs_from_values:用于将一个变量集values中的变量按照它们的类型进行分类。
-'''
+"""
 from typing import Callable, List
 import gtsam
 import gtsam_quadrics
@@ -14,26 +14,39 @@ import numpy as np
 from .quadricslam_states import QuadricSlamState
 
 
-'''# 函数QuadricInitialiser:用来初始化对偶二次曲面
-# 接受三个参数:
-# 一个 List[gtsam.Pose3] 类型的列表,表示位姿序列;
-# 一个 List[gtsam_quadrics.AlignedBox2] 类型的列表,表示bounding box;
-# 一个 QuadricSlamState 类型的实例,表示当前的 Quadric SLAM 状态。
-# 返回一个 gtsam_quadrics.ConstrainedDualQuadric 类型的实例,表示初始化得到的二次曲面。'''
+"""
+函数QuadricInitialiser:用来初始化对偶二次曲面
+接受三个参数:
+一个 List[gtsam.Pose3] 类型的列表,表示位姿序列;
+一个 List[gtsam_quadrics.AlignedBox2] 类型的列表,表示bounding box;
+一个 QuadricSlamState 类型的实例,表示当前的 Quadric SLAM 状态。
+返回一个 gtsam_quadrics.ConstrainedDualQuadric 类型的实例,表示初始化得到的二次曲面。
+
+List[gtsam.Pose3]: list representing sequencial pose
+List[gtsam_quadrics.AlignedBox2]: Lise of b-box
+QuadricSlamState: current state of quadric slam
+
+return gtsam_quadrics.ConstrainedDualQuadric containing dual quadrics obtained be initialization
+"""
 QuadricInitialiser = Callable[
     [List[gtsam.Pose3], List[gtsam_quadrics.AlignedBox2], QuadricSlamState],
     gtsam_quadrics.ConstrainedDualQuadric]
 
 
-'''# 这个函数用于从深度图像中初始化一个对偶二次曲面。
-# 输入参数包括:
-# 包含多个视图中物体的姿态obs_poses、包含多个视图中物体的边界框的列表、QuadricSlamState类型的state和物体的深度值object_depth。
-# 返回 ConstrainedDualQuadric 类型的对偶二次曲面对象。'''
+
 def initialise_quadric_from_depth(
         obs_poses: List[gtsam.Pose3],
         boxes: List[gtsam_quadrics.AlignedBox2],
         state: QuadricSlamState,
         object_depth=0.1) -> gtsam_quadrics.ConstrainedDualQuadric:
+    """
+    这个函数用于从深度图像中初始化一个对偶二次曲面。
+    输入参数包括:
+    包含多个视图中物体的姿态obs_poses、包含多个视图中物体的边界框的列表、QuadricSlamState类型的state和物体的深度值object_depth。
+    返回 ConstrainedDualQuadric 类型的对偶二次曲面对象。
+
+    useless for us
+    """
     # Uses the depth image to initialise a quadric from a single view 
     # (note: this assumes there is only a single view, and will discard all extra views)
     # 函数首先检查输入参数是否合法。
@@ -78,15 +91,25 @@ def initialise_quadric_from_depth(
     return gtsam_quadrics.ConstrainedDualQuadric(quadric_pose, radii)
 
 
-'''# 由物体在多个视图中的观测点和边界框信息生成对偶二次曲面。
-# TODO:我们要将多帧修改为单帧。
-# obs_poses: 一个包含多个视图中物体的位姿的列表
-# boxes: 一个包含多个视图中物体的边界框的列表
-# state: 一个QuadricSlamState对象,包含当前状态信息。
-# 对偶二次曲面的大小和方向直接捏造一个定值。'''
+
 def initialise_quadric_ray_intersection(
         obs_poses: List[gtsam.Pose3], boxes: List[gtsam_quadrics.AlignedBox2],
         state: QuadricSlamState) -> gtsam_quadrics.ConstrainedDualQuadric:
+    """
+    由物体在多个视图中的观测点和边界框信息生成对偶二次曲面。
+    TODO:我们要将多帧修改为单帧。
+    obs_poses: 一个包含多个视图中物体的位姿的列表
+    boxes: 一个包含多个视图中物体的边界框的列表
+    state: 一个QuadricSlamState对象,包含当前状态信息。
+    对偶二次曲面的大小和方向直接捏造一个定值。
+
+    generate dual quadrics from observation points in multiple frames and b-boxes
+    TODO we need to upgrade multiple frame to one frame
+    obs_poses: a list of objects in several views
+    boxes: a list of b-boxes in several views
+    state: a QuadricSlamState object containing current state and information
+    fudge the size and direcion for dual quadric
+    """
     # Takes all observations of a quadric, projects rays into 3D space, and
     # uses their closest convergence point to place the quadric. Initial
     # orientation and size are currently just dumb guesses.
@@ -114,10 +137,17 @@ def initialise_quadric_ray_intersection(
         gtsam.Rot3(), gtsam.Point3(quadric_centroid), [1, 1, 0.1])
 
 
-'''# 用于比较两个因子图current和previous之间的差异。
-# 该函数会找到在current中但不在previous中的所有因子,然后将这些因子构建成一个新的因子图并返回。'''
+
 def new_factors(current: gtsam.NonlinearFactorGraph,
                 previous: gtsam.NonlinearFactorGraph):
+    """
+    用于比较两个因子图current和previous之间的差异。  
+    该函数会找到在current中但不在previous中的所有因子,然后将这些因子构建成一个新的因子图并返回。  
+
+    compare the difference between current factor graph and previous factor graph.  
+    find all factors in current graph but not in previous, and use them to form a new factor graph.  
+    return the newly formed graph.  
+    """
     # Figure out the new factors
     fs = (set([current.at(i) for i in range(0, current.size())]) -
           set([previous.at(i) for i in range(0, previous.size())]))
@@ -129,10 +159,17 @@ def new_factors(current: gtsam.NonlinearFactorGraph,
     return out
 
 
-'''# 用于比较两个变量集current和previous之间的差异。
-# 该函数会找到在current中但不在previous中的所有变量,然后将这些变量构建成一个新的变量集并返回。
-# 需要注意的是,current和previous中的变量类型可以是gtsam.Quadric或者gtsam.Pose3。'''
+
 def new_values(current: gtsam.Values, previous: gtsam.Values):
+    """
+    用于比较两个变量集current和previous之间的差异。
+    该函数会找到在current中但不在previous中的所有变量,然后将这些变量构建成一个新的变量集并返回。
+    需要注意的是,current和previous中的变量类型可以是gtsam.Quadric或者gtsam.Pose3。
+
+    compare the difference between current values and previous values.
+    find all variables in current values but not in previous, and use them to form a new variable set
+    To be noticed, type of variable can be gtsam.Quadric or gtsam.Pose3
+    """
     # Figure out new values
     cps, cqs = ps_and_qs_from_values(current)
     pps, pqs = ps_and_qs_from_values(previous)
@@ -151,10 +188,17 @@ def new_values(current: gtsam.Values, previous: gtsam.Values):
     return out
 
 
-'''# 用于将一个变量集values中的变量按照它们的类型进行分类。
-# 函数返回一个包含两个字典的元组(cps, cqs),其中cps是所有类型为gtsam.Pose3的变量构成的字典,
-# cqs是所有类型为gtsam_quadrics.ConstrainedDualQuadric的变量构成的字典。'''
 def ps_and_qs_from_values(values: gtsam.Values):
+    """
+    用于将一个变量集values中的变量按照它们的类型进行分类。
+    函数返回一个包含两个字典的元组(cps, cqs),其中cps是所有类型为gtsam.Pose3的变量构成的字典,
+    cqs是所有类型为gtsam_quadrics.ConstrainedDualQuadric的变量构成的字典。
+
+    classify variables in values according to their type.
+    return a tuple containing two dicts: (cps,cqs), 
+    cps contains gtsam.Pose3 
+    cqs contains gtsam_quadrics.ConstrainedDualQuadric
+    """
     # TODO there's got to be a better way to access the typed values...
     
     # x是位姿,q是对偶二次曲线。
